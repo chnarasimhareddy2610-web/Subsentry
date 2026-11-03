@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+client/dist/
+server/dist/
+
+# Local MongoDB data, logs and runtime state
+.data/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment files (keep the template)
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Editor / OS noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Tool and scratch folders
+.freebuff/
+.tmp-ui-check/
+.netlify/
