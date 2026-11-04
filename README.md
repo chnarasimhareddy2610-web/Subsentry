@@ -18,9 +18,10 @@ Browser (React 18 + Vite)
    │  fetch /api/*  ── Vite dev proxy ──▶  Express REST API (Node)  ──▶  MongoDB
 ```
 
-- **Frontend** — React 18 SPA built with Vite. Feature components (summary cards, renewal
-  tracker, low-usage panel, leak suggestions, subscription table/form, usage history modal) render
-  a dark-themed dashboard. `src/api.js` is the single API client.
+- **Frontend** — React 18 SPA built with Vite. Feature components (commitment panel, renewal
+  tracker, low-usage panel, metrics row, category breakdown, leak suggestions, subscription table/form,
+  usage history modal, calendar and insights screens) render a warm, light dashboard. `src/api.js`
+  is the single API client.
 - **Backend** — Express 4 REST API with a layered layout: `routes/` → `middleware/` (validation,
   error handling) → `controllers/` → `models/` (Mongoose). Derived values live in
   `utils/metrics.js` and `utils/renewal.js`, so renewal/low-usage logic is computed server-side.
@@ -92,6 +93,63 @@ error if none can be found. In Atlas mode nothing is written to disk locally.
 Transient public-network failures (TLS alerts, resets) during the Atlas handshake are retried with
 backoff, and credentials are never written to logs — only a `scheme://host/database` target is
 printed.
+
+## Deployment & security
+
+SubSentry has no user accounts: it is an owner-only app. The shipped code has no authentication
+by default, so anyone who can reach the host can read and change subscriptions. For any internet-
+facing deployment, set these variables in `server/.env` to add an HTTP Basic authentication gate
+that protects both the dashboard and the API:
+
+| Variable | Default | Notes |
+| --- | --- | --- |
+| `AUTH_USER` | (empty) | Username for the optional access gate; with it unset the gate is a no-op |
+| `AUTH_PASSWORD` | (empty) | Password for the optional access gate; both values must be set for the gate to activate |
+| `TRUST_PROXY` | `false` | Set to `1`/`true`/`yes`/`on` when behind a reverse proxy or platform load balancer so rate limiting sees the real client IP |
+| `WRITE_RATE_LIMIT_MAX` | `120` | Maximum mutating `/api` requests per client IP per window; `0` disables |
+| `WRITE_RATE_LIMIT_WINDOW_MS` | `300000` | Window in milliseconds for the write rate limit (default 5 minutes) |
+
+When the gate is active, `GET /api/health` stays open (platform/orchestrator probes cannot send
+credentials, and it exposes no user data), while every other route returns `401` with a
+`WWW-Authenticate: Basic` header until valid credentials are supplied. Reads are never rate-limited;
+only `POST`/`PUT`/`PATCH`/`DELETE` to `/api/*` are throttled. Set `WRITE_RATE_LIMIT_MAX=0` to
+disable the limiter, for example when an edge platform already enforces its own limits.
+
+The server also sends these response headers on every request:
+
+- `Content-Security-Policy`: scripts from `'self'` only, styles from `'self'` plus Google Fonts
+  (inline `style` attributes are allowed for bar widths; inline scripts are not),
+  fonts from `'self'` and `fonts.gstatic.com`, images from `'self'` and `data:`, connections
+  to `'self'` only, `frame-ancestors 'none'`.
+- `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy:`
+  `strict-origin-when-cross-origin`, `Permissions-Policy: camera=(), microphone=(), geolocation=()`,
+  `Cross-Origin-Opener-Policy: same-origin`.
+- `Strict-Transport-Security` only when `NODE_ENV=production` or the request is already HTTPS.
+- `X-Powered-By` is disabled.
+
+Server error responses for status `>= 500` return a generic message; diagnostic details stay in the
+server logs only. The request body is capped at 100 kB and Mongoose `ObjectId`/`cast`/`validation`/
+duplicate-key errors are mapped to `400`/`422`/`400` JSON responses.
+
+Deploy checklist:
+
+1. Build the client: `npm run build`.
+2. Set `MONGODB_URI` to your Atlas SRV string (or a local `mongod`) in `server/.env`.
+3. Set `CLIENT_ORIGIN` to your deployed frontend origin (same-origin when Express also serves
+   `client/dist`, so this is mainly for cross-origin deployments).
+4. Set `AUTH_USER` and `AUTH_PASSWORD` for any internet-facing instance.
+5. Set `TRUST_PROXY` if a reverse proxy or platform load balancer fronts the app.
+6. Allow the deployment's outbound IP under **Atlas → Network Access** (or use a private/VPC
+   connection) and ensure the cluster allows TLS from this platform.
+7. Serve over HTTPS. The CSP, HSTS (in production) and `frame-ancestors 'none'` assume a secure,
+   same-origin deployment.
+
+`npm run verify` runs a 56-check end-to-end suite against an in-memory MongoDB and does **not**
+need Atlas or any network access. A separate security smoke test,
+`server/scripts/security.mjs`, exercises the access gate, security headers, open health probe and
+write rate limiter against the same in-memory database (run with
+`AUTH_USER=owner AUTH_PASSWORD=<pw> WRITE_RATE_LIMIT_MAX=3 node server/scripts/security.mjs`).
+That file is a local helper and is **not** shipped in the repo.
 
 ## Commands
 
