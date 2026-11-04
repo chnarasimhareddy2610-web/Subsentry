@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { formatDate } from '../format.js';
+import { IconClose } from './icons.jsx';
+import { SkeletonLines } from './ui.jsx';
 
 function formatDateTime(value) {
   if (!value) return '—';
@@ -28,7 +30,9 @@ export default function UsageHistoryModal({ subscription, onClose, onRefresh }) 
     try {
       setLoading(true);
       const data = await api.getUsageHistory(subscription.id);
-      setLogs(data.logs ?? []);
+      // The API returns sub-documents with `_id`; normalise so each row keeps a
+      // stable key and deletion targets a real log id.
+      setLogs((data.logs ?? []).map((log) => ({ ...log, id: log.id ?? log._id })));
       setError('');
     } catch (err) {
       setError(err.message);
@@ -41,9 +45,10 @@ export default function UsageHistoryModal({ subscription, onClose, onRefresh }) 
     loadHistory();
   }, [loadHistory]);
 
-  // Trap Escape key
   useEffect(() => {
-    const handler = (e) => { if (e.key === 'Escape') onClose(); };
+    const handler = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
     document.addEventListener('keydown', handler);
     document.body.classList.add('modal-open');
     return () => {
@@ -84,42 +89,29 @@ export default function UsageHistoryModal({ subscription, onClose, onRefresh }) 
   return (
     <div
       className="modal-overlay"
-      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
     >
-      <div className="modal glass usage-history-modal" role="dialog" aria-modal="true" aria-label={`Usage history for ${subscription.service}`}>
+      <div
+        className="modal modal--wide"
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Usage history for ${subscription.service}`}
+      >
         <div className="modal-head">
-          <h2>
-            <span className="icon" aria-hidden="true">📋</span>
-            Usage History — {subscription.service}
-          </h2>
-          <button type="button" className="modal-close" onClick={onClose} aria-label="Close">✕</button>
+          <div>
+            <h2 className="modal-title">Usage history</h2>
+            <p className="modal-sub">
+              {subscription.service} · {subscription.name}
+            </p>
+          </div>
+          <button type="button" className="modal-close" onClick={onClose} aria-label="Close dialog">
+            <IconClose width={16} height={16} />
+          </button>
         </div>
 
         <div className="modal-body">
-          {/* Quick-log form */}
-          <form className="usage-log-form" onSubmit={handleLogUsage}>
-            <div className="usage-log-row">
-              <input
-                type="text"
-                className="usage-note-input"
-                placeholder="Add a note (optional) — e.g. 'Watched movie'"
-                value={logNote}
-                maxLength={200}
-                onChange={(e) => setLogNote(e.target.value)}
-              />
-              <button type="submit" className="add-btn usage-log-btn" disabled={saving}>
-                {saving ? 'Logging…' : '+ Log Use'}
-              </button>
-            </div>
-          </form>
-
-          {error && (
-            <div className="form-error" role="alert" style={{ marginBottom: '14px' }}>
-              <span aria-hidden="true">⚠️</span> {error}
-            </div>
-          )}
-
-          {/* Stats bar */}
           <div className="usage-stats-bar">
             <span className="usage-stat">
               <strong>{subscription.usageCount}</strong> total uses
@@ -127,19 +119,40 @@ export default function UsageHistoryModal({ subscription, onClose, onRefresh }) 
             <span className="usage-stat">
               <strong>{subscription.recentUsageCount ?? 0}</strong> in last 30 days
             </span>
-            {subscription.lastUsedAt && (
-              <span className="usage-stat muted">
-                Last used {formatDate(subscription.lastUsedAt)}
-              </span>
-            )}
+            <span className="usage-stat">
+              <strong>{subscription.lastUsedAt ? formatDate(subscription.lastUsedAt) : '—'}</strong>
+              last used
+            </span>
           </div>
 
-          {/* Log list */}
-          {loading && <p className="empty-state">Loading history…</p>}
+          <form className="usage-log-form" onSubmit={handleLogUsage}>
+            <div className="usage-log-row">
+              <input
+                type="text"
+                className="usage-note-input"
+                placeholder="Note (optional) — e.g. watched a film"
+                value={logNote}
+                maxLength={200}
+                onChange={(e) => setLogNote(e.target.value)}
+                aria-label="Usage note"
+              />
+              <button type="submit" className="btn btn--primary" disabled={saving}>
+                {saving ? 'Logging…' : 'Log use'}
+              </button>
+            </div>
+          </form>
+
+          {error && (
+            <div className="form-error" role="alert">
+              {error}
+            </div>
+          )}
+
+          {loading && <SkeletonLines lines={4} widths={['w90', 'w70', 'w90', 'w40']} />}
 
           {!loading && logs.length === 0 && (
-            <p className="empty-state">
-              No usage recorded yet. Use the <strong>+1</strong> button in the table or log one above.
+            <p className="empty__text" style={{ padding: '12px 0' }}>
+              No usage recorded yet. Log one above, or use the +1 control in the ledger.
             </p>
           )}
 
@@ -156,13 +169,13 @@ export default function UsageHistoryModal({ subscription, onClose, onRefresh }) 
                   </div>
                   <button
                     type="button"
-                    className="mini-btn ghost usage-log-delete"
+                    className="usage-btn usage-log-delete"
                     onClick={() => handleDelete(log.id)}
                     disabled={deletingId === log.id}
                     title="Remove this record"
                     aria-label="Remove this usage record"
                   >
-                    ✕
+                    <IconClose width={13} height={13} />
                   </button>
                 </li>
               ))}

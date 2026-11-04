@@ -1,8 +1,9 @@
 import { formatCurrency } from '../format.js';
+import { IconArrowUpRight } from './icons.jsx';
 
 function buildTips(subscriptions, stats) {
   if (subscriptions.length === 0) {
-    return ['No subscriptions added yet. Add one above to get started!'];
+    return ['No subscriptions recorded yet. Add one to begin the ledger.'];
   }
 
   const tips = [];
@@ -10,7 +11,7 @@ function buildTips(subscriptions, stats) {
 
   if (monthly > 5000) {
     tips.push(
-      `You're spending more than ${formatCurrency(5000)} per month. Review high-cost plans and consider consolidating.`
+      `Your monthly commitment is ${formatCurrency(monthly)} — above the ${formatCurrency(5000)} review line. Consolidating the highest-cost plans would move it fastest.`
     );
   }
 
@@ -19,7 +20,7 @@ function buildTips(subscriptions, stats) {
   ).length;
   if (entertainment >= 3) {
     tips.push(
-      `You have ${entertainment} entertainment subscriptions. Consider dropping the streaming services you watch least.`
+      `${entertainment} entertainment subscriptions are active at once. Rotating streaming services instead of stacking them is the usual saving.`
     );
   }
 
@@ -28,7 +29,7 @@ function buildTips(subscriptions, stats) {
   );
   if (expensive.length > 0) {
     tips.push(
-      `${expensive.length} subscription(s) cost ₹1,000 or more per month. Check whether annual billing is cheaper.`
+      `${expensive.length} ${expensive.length === 1 ? 'plan costs' : 'plans cost'} ₹1,000 or more per month. Switching to annual billing is often cheaper for plans you keep.`
     );
   }
 
@@ -36,26 +37,26 @@ function buildTips(subscriptions, stats) {
   if (lowUsage.length > 0) {
     const names = lowUsage.slice(0, 3).map((item) => item.service).join(', ');
     tips.push(
-      `${lowUsage.length} subscription(s) look underused (${names}${lowUsage.length > 3 ? ', …' : ''}). Cancel or downgrade them to stop the leak.`
+      `${lowUsage.length} ${lowUsage.length === 1 ? 'subscription looks' : 'subscriptions look'} underused (${names}${lowUsage.length > 3 ? ', …' : ''}). Cancelling or downgrading stops the leak.`
     );
   }
 
   const renewals = stats?.upcomingRenewals ?? [];
   if (renewals.length > 0) {
     tips.push(
-      `${renewals.length} renewal(s) are due within ${stats?.settings?.renewalWindowDays ?? 7} days. Decide before the charge lands.`
+      `${renewals.length} ${renewals.length === 1 ? 'renewal falls' : 'renewals fall'} within ${stats?.settings?.renewalWindowDays ?? 7} days. Decide before the charge lands.`
     );
   }
 
   const ended = subscriptions.filter((item) => item.isEnded);
   if (ended.length > 0) {
     tips.push(
-      `${ended.length} subscription(s) are past their end date. Delete them if the plan has lapsed.`
+      `${ended.length} ${ended.length === 1 ? 'subscription is' : 'subscriptions are'} past their end date. Delete them once the plan has lapsed.`
     );
   }
 
   if (tips.length === 0) {
-    tips.push('Your subscriptions look well-optimized! Keep monitoring to stay on track. 🎉');
+    tips.push('No leaks detected. Your subscriptions are spread sensibly and used regularly.');
   }
 
   return tips;
@@ -65,11 +66,22 @@ export default function LeakSuggestions({ subscriptions, stats }) {
   const tips = buildTips(subscriptions, stats);
 
   return (
-    <section className="card glass suggestions-card">
-      <h2><span className="icon" aria-hidden="true">🔍</span> Leak Detection Suggestions</h2>
-      <ul>
+    <section className="panel" aria-labelledby="observations-title">
+      <div className="panel-head">
+        <h2 className="panel-title" id="observations-title">
+          Observations
+        </h2>
+        <span className="panel-sub">From your ledger</span>
+      </div>
+
+      <ul className="suggestions">
         {tips.map((tip) => (
-          <li key={tip}>{tip}</li>
+          <li className="suggestion" key={tip}>
+            <span className="suggestion__bullet" aria-hidden="true">
+              <IconArrowUpRight width={15} height={15} />
+            </span>
+            <span>{tip}</span>
+          </li>
         ))}
       </ul>
     </section>

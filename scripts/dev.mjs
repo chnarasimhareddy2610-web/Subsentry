@@ -62,6 +62,8 @@ function readServerEnv() {
   return env;
 }
 
+// MONGODB_URI is authoritative (Atlas in production, local during development);
+// MONGO_URI is a legacy alias and never overrides it.
 function resolveMongoUri(serverEnv) {
   return (
     process.env.MONGODB_URI ||
@@ -70,6 +72,11 @@ function resolveMongoUri(serverEnv) {
     serverEnv.MONGO_URI ||
     DEFAULT_MONGO_URI
   );
+}
+
+/** URI with any user:password stripped — safe to print. */
+function safeTarget(uri) {
+  return uri.replace(/^([a-z+]+:\/\/)[^@/]*@/i, '$1***@');
 }
 
 /**
@@ -338,6 +345,8 @@ async function main() {
   const serverEnv = readServerEnv();
   const port = pickPort(process.env.PORT, serverEnv.PORT);
   const mongoUri = resolveMongoUri(serverEnv);
+  // localMongoTarget() deliberately returns null for mongodb+srv:// URIs, so an
+  // Atlas connection never triggers a local mongod spawn.
   const local = localMongoTarget(mongoUri);
 
   let mongodProc = null;
@@ -351,7 +360,7 @@ async function main() {
         console.error(`[dev] Nothing is listening on ${local.host}:${local.port} and no mongod binary was found.`);
         console.error('[dev] Fix one of the following:');
         console.error('  - install MongoDB and put mongod on PATH, or');
-        console.error('  - set MONGODB_URI in server/.env to a MongoDB Atlas connection string.');
+        console.error('  - set MONGODB_URI in server/.env to your MongoDB Atlas SRV connection string.');
         process.exit(1);
       }
 
@@ -377,7 +386,11 @@ async function main() {
       }
     }
   } else {
-    console.log('[dev] MONGODB_URI points at a remote host (e.g. Atlas) — using it as-is');
+    // Atlas (mongodb+srv://) or any non-local host: the database already runs
+    // remotely, so no local mongod is spawned.
+    const label = mongoUri.startsWith('mongodb+srv://') ? 'MongoDB Atlas (SRV)' : 'remote MongoDB';
+    console.log(`[dev] Using ${label} — skipping local mongod`);
+    console.log(`[dev]   target: ${safeTarget(mongoUri)}`);
   }
 
   // 2. Express API

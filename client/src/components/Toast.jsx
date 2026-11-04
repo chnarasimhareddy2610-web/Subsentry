@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { IconCheck, IconWarning } from './icons.jsx';
 
 export default function Toast({ toast, onClose }) {
   useEffect(() => {
@@ -11,7 +12,13 @@ export default function Toast({ toast, onClose }) {
 
   return (
     <div className={`toast ${toast.type}`} role="status" aria-live="polite">
-      <span aria-hidden="true">{toast.type === 'success' ? '✅' : '⚠️'}</span>
+      <span className="toast__icon" aria-hidden="true">
+        {toast.type === 'success' ? (
+          <IconCheck width={16} height={16} />
+        ) : (
+          <IconWarning width={16} height={16} />
+        )}
+      </span>
       <span>{toast.message}</span>
     </div>
   );

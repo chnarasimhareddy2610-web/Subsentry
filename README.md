@@ -61,13 +61,18 @@ Browser (React 18 + Vite)
 
 ## Environment setup
 
-Requirements: **Node.js >= 18** and **MongoDB** (a local `mongod` binary, or a MongoDB Atlas
-connection string).
+Requirements: **Node.js >= 18** and **MongoDB** — either a local `mongod` binary or a MongoDB
+Atlas cluster. Atlas is the primary mode: when `MONGODB_URI` is a `mongodb+srv://` string, the dev
+orchestrator connects straight to the cluster and never starts a local `mongod`.
 
 ```bash
 npm install                          # installs root, client and server workspaces
 cp server/.env.example server/.env   # then edit values (never commit .env)
 ```
+
+For Atlas, copy the SRV string from *Atlas → Connect* into `MONGODB_URI` and percent-encode any
+special characters in the password (`p@ss` → `p%40ss`). Allow your machine's IP under
+*Atlas → Network Access*.
 
 `server/.env` keys:
 
@@ -75,14 +80,18 @@ cp server/.env.example server/.env   # then edit values (never commit .env)
 | --- | --- | --- |
 | `PORT` | `5000` | API port; invalid values fall back to `5000` |
 | `NODE_ENV` | `development` | |
-| `MONGODB_URI` | `mongodb://127.0.0.1:27017/subsentry` | Primary connection string (`MONGO_URI` accepted as a legacy alias) |
+| `MONGODB_URI` | `mongodb://127.0.0.1:27017/subsentry` | Primary connection string (`MONGO_URI` is a legacy alias and never overrides it). `mongodb+srv://` selects Atlas; a local host selects the bundled on-disk `mongod` |
 | `CLIENT_ORIGIN` | `http://localhost:5173` | Comma-separated list of allowed browser origins |
 | `LOW_USAGE_THRESHOLD` | `3` | Uses per 30 days below which a plan counts as low usage |
 | `RENEWAL_WINDOW_DAYS` | `7` | Days ahead that count as an upcoming renewal |
 
-Local data lives in `.data/mongodb` with logs in `.data/mongod.log`; both are git-ignored. The dev
-orchestrator reuses a cached `mongod` binary when one is available and prints a clear setup error
-if none can be found.
+In local mode data lives in `.data/mongodb` with logs in `.data/mongod.log`; both are git-ignored.
+The dev orchestrator reuses a cached `mongod` binary when one is available and prints a clear setup
+error if none can be found. In Atlas mode nothing is written to disk locally.
+
+Transient public-network failures (TLS alerts, resets) during the Atlas handshake are retried with
+backoff, and credentials are never written to logs — only a `scheme://host/database` target is
+printed.
 
 ## Commands
 

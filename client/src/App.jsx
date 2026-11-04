@@ -1,24 +1,31 @@
 import { useCallback, useEffect, useState } from 'react';
-import BackgroundAnimation from './components/BackgroundAnimation.jsx';
-import CartoonCharacter from './components/CartoonCharacter.jsx';
-import Hero from './components/Hero.jsx';
-import SummaryCards from './components/SummaryCards.jsx';
-import SubscriptionForm from './components/SubscriptionForm.jsx';
-import RenewalTracker from './components/RenewalTracker.jsx';
-import LowUsagePanel from './components/LowUsagePanel.jsx';
-import SubscriptionTable from './components/SubscriptionTable.jsx';
-import LeakSuggestions from './components/LeakSuggestions.jsx';
+import AppShell from './components/AppShell.jsx';
+import CalendarView from './components/CalendarView.jsx';
+import DashboardView from './components/DashboardView.jsx';
+import InsightsView from './components/InsightsView.jsx';
 import Modal from './components/Modal.jsx';
-import UsageHistoryModal from './components/UsageHistoryModal.jsx';
+import SubscriptionsView from './components/SubscriptionsView.jsx';
+import SubscriptionForm from './components/SubscriptionForm.jsx';
 import Toast from './components/Toast.jsx';
+import UsageHistoryModal from './components/UsageHistoryModal.jsx';
+import { IconWarning } from './components/icons.jsx';
 import { api } from './api.js';
 
+const VIEWS = ['dashboard', 'subscriptions', 'calendar', 'insights'];
+
+function readHash() {
+  const raw = window.location.hash.replace(/^#\/?/, '');
+  return VIEWS.includes(raw) ? raw : 'dashboard';
+}
+
 export default function App() {
+  const [view, setView] = useState(readHash);
   const [subscriptions, setSubscriptions] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [toast, setToast] = useState(null);
+  const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState(null);
   const [viewingHistory, setViewingHistory] = useState(null);
   const [busyId, setBusyId] = useState(null);
@@ -60,7 +67,6 @@ export default function App() {
           if (attempts >= MAX) {
             setLoadError(error.message);
           } else {
-            // Wait 2 s before retrying
             await new Promise((res) => setTimeout(res, 2000));
           }
         }
@@ -73,9 +79,23 @@ export default function App() {
     };
   }, []);
 
+  // Keep the active screen in the URL so reload and back/forward behave.
+  useEffect(() => {
+    const onHashChange = () => setView(readHash());
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
+
+  const navigate = useCallback((next) => {
+    setView(next);
+    window.history.replaceState(null, '', `#/${next}`);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
+
   const handleCreate = async (payload) => {
     await api.create(payload);
     await refresh();
+    setAdding(false);
     notify('Subscription added');
   };
 
@@ -150,10 +170,6 @@ export default function App() {
     }
   };
 
-  const handleViewHistory = (subscription) => {
-    setViewingHistory(subscription);
-  };
-
   const handleRetry = async () => {
     setLoading(true);
     await refresh();
@@ -161,65 +177,112 @@ export default function App() {
   };
 
   const ready = !loading && Boolean(stats);
+  const connected = Boolean(stats) && !loadError;
+  const activeCount = subscriptions.filter((item) => !item.isEnded).length;
+
+  const sharedTableProps = {
+    busyId,
+    onEdit: setEditing,
+    onDelete: handleDelete,
+    onEnd: handleEnd,
+    onLogUsage: handleLogUsage,
+    onResetUsage: handleResetUsage,
+    onViewHistory: (subscription) => setViewingHistory(subscription),
+  };
 
   return (
     <>
-      <BackgroundAnimation />
-      <CartoonCharacter />
-
-      <div className="container">
-        <Hero />
-
+      <AppShell
+        view={view}
+        onNavigate={navigate}
+        onAdd={() => setAdding(true)}
+        planCount={activeCount}
+        connected={connected}
+      >
         {loadError && (
           <div className="error-banner" role="alert">
-            <span>⚠️ {loadError}</span>
-            <button type="button" className="btn-secondary" onClick={handleRetry}>
+            <span className="error-banner__content">
+              <IconWarning width={16} height={16} />
+              {loadError}
+            </span>
+            <button type="button" className="btn btn--sm" onClick={handleRetry}>
               Retry
             </button>
           </div>
         )}
 
-        <section className="card glass">
-          <h2><span className="icon" aria-hidden="true">➕</span> Add Subscription</h2>
-          <SubscriptionForm onSubmit={handleCreate} />
-        </section>
-
-        <SummaryCards stats={stats} ready={ready} />
-
-        <div className="dashboard-grid">
-          <RenewalTracker
-            renewals={stats?.upcomingRenewals ?? []}
-            windowDays={stats?.settings?.renewalWindowDays ?? 7}
-            ready={Boolean(stats)}
+        {loadError && !stats ? (
+          <section className="panel">
+            <div className="empty empty--center">
+              <span className="empty__icon">
+                <IconWarning width={22} height={22} />
+              </span>
+              <p className="empty__title">The ledger could not be loaded</p>
+              <p className="empty__text">
+                The API did not answer. Confirm the Express server is running, then try again.
+              </p>
+              <button type="button" className="btn btn--primary btn--sm" onClick={handleRetry}>
+                Retry connection
+              </button>
+            </div>
+          </section>
+        ) : view === 'dashboard' ? (
+          <DashboardView
+            stats={stats}
+            subscriptions={subscriptions}
+            ready={ready}
+            loading={loading}
+            onAdd={() => setAdding(true)}
+            onViewAll={() => navigate('subscriptions')}
+            onViewCalendar={() => navigate('calendar')}
+            {...sharedTableProps}
           />
-          <LowUsagePanel
-            items={stats?.lowUsage ?? []}
-            threshold={stats?.settings?.lowUsageThreshold ?? 3}
-            ready={Boolean(stats)}
+        ) : view === 'subscriptions' ? (
+          <SubscriptionsView
+            subscriptions={subscriptions}
+            loading={loading}
+            onAdd={() => setAdding(true)}
+            {...sharedTableProps}
           />
-        </div>
+        ) : view === 'calendar' ? (
+          <CalendarView
+            subscriptions={subscriptions}
+            loading={loading}
+            onAdd={() => setAdding(true)}
+            onViewHistory={(subscription) => setViewingHistory(subscription)}
+          />
+        ) : (
+          <InsightsView
+            stats={stats}
+            subscriptions={subscriptions}
+            ready={ready}
+            loading={loading}
+            onAdd={() => setAdding(true)}
+            onViewHistory={(subscription) => setViewingHistory(subscription)}
+          />
+        )}
+      </AppShell>
 
-        <SubscriptionTable
-          subscriptions={subscriptions}
-          onEdit={setEditing}
-          onDelete={handleDelete}
-          onEnd={handleEnd}
-          onLogUsage={handleLogUsage}
-          onResetUsage={handleResetUsage}
-          onViewHistory={handleViewHistory}
-          busyId={busyId}
-          loading={loading}
-        />
-
-        <LeakSuggestions subscriptions={subscriptions} stats={stats} />
-
-        <footer className="app-footer">
-          SubSentry · React + Vite · Express REST API · MongoDB persistence
-        </footer>
-      </div>
+      {adding && (
+        <Modal
+          title="New subscription"
+          subtitle="Add a recurring charge to the ledger. Monthly equivalents are calculated for you."
+          onClose={() => setAdding(false)}
+        >
+          <SubscriptionForm
+            mode="add"
+            onSubmit={handleCreate}
+            onCancel={() => setAdding(false)}
+          />
+        </Modal>
+      )}
 
       {editing && (
-        <Modal title={`Edit ${editing.service}`} onClose={() => setEditing(null)}>
+        <Modal
+          title={`Edit ${editing.service}`}
+          subtitle="Changes apply to this plan from now on."
+          onClose={() => setEditing(null)}
+        >
           <SubscriptionForm
             key={editing.id}
             mode="edit"
@@ -232,7 +295,10 @@ export default function App() {
 
       {viewingHistory && (
         <UsageHistoryModal
-          subscription={viewingHistory}
+          // Read through to the latest record so the totals stay live after logging.
+          subscription={
+            subscriptions.find((item) => item.id === viewingHistory.id) ?? viewingHistory
+          }
           onClose={() => setViewingHistory(null)}
           onRefresh={refresh}
         />

@@ -47,11 +47,7 @@ function validate(values, mode) {
   }
 
   if (!values.billingDate) errors.billingDate = 'Billing date is required';
-  if (
-    values.endDate &&
-    values.billingDate &&
-    values.endDate < values.billingDate
-  ) {
+  if (values.endDate && values.billingDate && values.endDate < values.billingDate) {
     errors.endDate = 'End date cannot be earlier than the billing date';
   }
 
@@ -65,12 +61,7 @@ function validate(values, mode) {
   return errors;
 }
 
-export default function SubscriptionForm({
-  mode = 'add',
-  initialValues,
-  onSubmit,
-  onCancel,
-}) {
+export default function SubscriptionForm({ mode = 'add', initialValues, onSubmit, onCancel }) {
   const [values, setValues] = useState(() => toFormValues(initialValues));
   const [errors, setErrors] = useState({});
   const [formError, setFormError] = useState('');
@@ -132,43 +123,53 @@ export default function SubscriptionForm({
     <form className="subscription-form" onSubmit={handleSubmit} noValidate>
       {formError && (
         <div className="form-error" role="alert">
-          <span aria-hidden="true">⚠️</span> {formError}
+          {formError}
         </div>
       )}
 
-      <div className="input-group">
-        <div className="input-wrap">
-          <label htmlFor={`name-${mode}`}>Name *</label>
-          <input
-            id={`name-${mode}`}
-            type="text"
-            value={values.name}
-            onChange={update('name')}
-            placeholder="e.g. John Doe"
-            maxLength={80}
-            className={errors.name ? 'input-invalid' : undefined}
-            aria-invalid={Boolean(errors.name)}
-          />
-          {errors.name && <span className="field-error">{errors.name}</span>}
-        </div>
-
-        <div className="input-wrap">
+      <div className="form-grid">
+        <div className="field">
           <label htmlFor={`service-${mode}`}>Service *</label>
           <input
             id={`service-${mode}`}
             type="text"
             value={values.service}
             onChange={update('service')}
-            placeholder="e.g. Netflix"
+            placeholder="Netflix"
             maxLength={80}
             className={errors.service ? 'input-invalid' : undefined}
             aria-invalid={Boolean(errors.service)}
+            aria-describedby={errors.service ? `service-${mode}-error` : undefined}
           />
-          {errors.service && <span className="field-error">{errors.service}</span>}
+          {errors.service && (
+            <span className="error-text" id={`service-${mode}-error`}>
+              {errors.service}
+            </span>
+          )}
         </div>
 
-        <div className="input-wrap">
-          <label htmlFor={`cost-${mode}`}>Cost (₹) *</label>
+        <div className="field">
+          <label htmlFor={`name-${mode}`}>Plan name *</label>
+          <input
+            id={`name-${mode}`}
+            type="text"
+            value={values.name}
+            onChange={update('name')}
+            placeholder="Standard with ads"
+            maxLength={80}
+            className={errors.name ? 'input-invalid' : undefined}
+            aria-invalid={Boolean(errors.name)}
+            aria-describedby={errors.name ? `name-${mode}-error` : undefined}
+          />
+          {errors.name && (
+            <span className="error-text" id={`name-${mode}-error`}>
+              {errors.name}
+            </span>
+          )}
+        </div>
+
+        <div className="field">
+          <label htmlFor={`cost-${mode}`}>Cost per cycle (₹) *</label>
           <input
             id={`cost-${mode}`}
             type="number"
@@ -177,67 +178,43 @@ export default function SubscriptionForm({
             step="0.01"
             value={values.cost}
             onChange={update('cost')}
-            placeholder="e.g. 499"
+            placeholder="499"
             className={errors.cost ? 'input-invalid' : undefined}
             aria-invalid={Boolean(errors.cost)}
+            aria-describedby={errors.cost ? `cost-${mode}-error` : undefined}
           />
-          {errors.cost && <span className="field-error">{errors.cost}</span>}
+          {errors.cost && (
+            <span className="error-text" id={`cost-${mode}-error`}>
+              {errors.cost}
+            </span>
+          )}
         </div>
 
-        <div className="input-wrap">
+        <div className="field">
           <label htmlFor={`category-${mode}`}>Category</label>
-          <div className="custom-select-wrapper">
-            <select
-              id={`category-${mode}`}
-              value={values.category}
-              onChange={update('category')}
-            >
-              {CATEGORIES.map((category) => (
-                <option key={category} value={category}>{category}</option>
-              ))}
-            </select>
-            <span className="select-arrow" aria-hidden="true">▾</span>
-          </div>
+          <select id={`category-${mode}`} value={values.category} onChange={update('category')}>
+            {CATEGORIES.map((category) => (
+              <option key={category} value={category}>
+                {category}
+              </option>
+            ))}
+          </select>
         </div>
 
-        <div className="input-wrap">
-          <label htmlFor={`cycle-${mode}`}>Billing Cycle</label>
-          <div className="custom-select-wrapper">
-            <select
-              id={`cycle-${mode}`}
-              value={values.billingCycle}
-              onChange={update('billingCycle')}
-            >
-              {BILLING_CYCLES.map((cycle) => (
-                <option key={cycle.value} value={cycle.value}>{cycle.label}</option>
-              ))}
-            </select>
-            <span className="select-arrow" aria-hidden="true">▾</span>
-          </div>
+        <div className="field">
+          <label htmlFor={`cycle-${mode}`}>Billing cycle</label>
+          <select id={`cycle-${mode}`} value={values.billingCycle} onChange={update('billingCycle')}>
+            {BILLING_CYCLES.map((cycle) => (
+              <option key={cycle.value} value={cycle.value}>
+                {cycle.label}
+              </option>
+            ))}
+          </select>
         </div>
-
-        <DateField
-          id={`billingDate-${mode}`}
-          label="Billing Date"
-          value={values.billingDate}
-          onChange={setDate('billingDate')}
-          placeholder="Select billing date"
-          error={errors.billingDate}
-          required
-        />
-
-        <DateField
-          id={`endDate-${mode}`}
-          label="End Date (optional)"
-          value={values.endDate}
-          onChange={setDate('endDate')}
-          placeholder="Select end date"
-          error={errors.endDate}
-        />
 
         {mode === 'edit' && (
-          <div className="input-wrap">
-            <label htmlFor={`usage-${mode}`}>Times Used</label>
+          <div className="field">
+            <label htmlFor={`usage-${mode}`}>Times used</label>
             <input
               id={`usage-${mode}`}
               type="number"
@@ -248,20 +225,38 @@ export default function SubscriptionForm({
               className={errors.usageCount ? 'input-invalid' : undefined}
               aria-invalid={Boolean(errors.usageCount)}
             />
-            {errors.usageCount && <span className="field-error">{errors.usageCount}</span>}
+            {errors.usageCount && <span className="error-text">{errors.usageCount}</span>}
           </div>
         )}
 
-        <div className="input-wrap btn-wrap">
-          <div className="form-actions">
-            {mode === 'edit' && (
-              <button type="button" className="btn-secondary" onClick={onCancel} disabled={saving}>
+        <DateField
+          id={`billingDate-${mode}`}
+          label="Billing date"
+          value={values.billingDate}
+          onChange={setDate('billingDate')}
+          placeholder="Select billing date"
+          error={errors.billingDate}
+          required
+        />
+
+        <DateField
+          id={`endDate-${mode}`}
+          label="End date (optional)"
+          value={values.endDate}
+          onChange={setDate('endDate')}
+          placeholder="Select end date"
+          error={errors.endDate}
+        />
+
+        <div className="field field--full">
+          <div className="form-actions" style={{ marginTop: 0 }}>
+            {onCancel && (
+              <button type="button" className="btn" onClick={onCancel} disabled={saving}>
                 Cancel
               </button>
             )}
-            <button type="submit" className="add-btn" disabled={saving}>
-              <span>{saving ? 'Saving…' : mode === 'edit' ? 'Save Changes' : 'Add Subscription'}</span>
-              <span className="btn-icon" aria-hidden="true">→</span>
+            <button type="submit" className="btn btn--primary" disabled={saving}>
+              {saving ? 'Saving…' : mode === 'edit' ? 'Save changes' : 'Add subscription'}
             </button>
           </div>
         </div>

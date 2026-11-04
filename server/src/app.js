@@ -7,17 +7,33 @@ import mongoose from 'mongoose';
 import { config } from './config/env.js';
 import subscriptionRoutes from './routes/subscriptionRoutes.js';
 import { errorHandler, notFound } from './middleware/error.js';
+import { accessGate, securityHeaders, writeRateLimit } from './middleware/security.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const clientDist = path.resolve(here, '../../client/dist');
 
 export const app = express();
 
+// Do not advertise the framework, and (when deployed behind a proxy) trust one
+// hop so rate limiting sees the real client address.
+app.disable('x-powered-by');
+if (config.trustProxy) app.set('trust proxy', 1);
+
+app.use(securityHeaders);
+
+// CORS must run before the access gate so browser preflights are answered.
 app.use(
   cors({
     origin: config.clientOrigin.split(',').map((origin) => origin.trim()),
   })
 );
+
+// Optional owner-only gate, active only when AUTH_USER/AUTH_PASSWORD are set.
+app.use(accessGate);
+
+// Throttle mutating API calls only; static assets and reads stay unlimited.
+app.use(writeRateLimit);
+
 app.use(express.json({ limit: '100kb' }));
 
 app.get('/api/health', (_req, res) => {

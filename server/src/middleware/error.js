@@ -34,7 +34,12 @@ export function errorHandler(err, req, res, next) {
   }
 
   if (status >= 500) {
+    // Log the detail server-side, but never hand driver/stack text to the
+    // client: it can describe the database host, credentials or internals.
     console.error('[error]', err);
+    status = 500;
+    message = 'Internal server error';
+    errors = undefined;
   }
 
   res.status(status).json({ message, ...(errors ? { errors } : {}) });

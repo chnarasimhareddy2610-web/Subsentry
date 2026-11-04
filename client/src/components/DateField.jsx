@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { IconCalendar } from './icons.jsx';
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -18,10 +19,6 @@ function toISO({ y, m, d }) {
   return `${y}-${pad(m + 1)}-${pad(d)}`;
 }
 
-/**
- * The original app shipped a hand-built calendar; this keeps the same markup
- * and classes so the visual identity and behaviour survive the React port.
- */
 export default function DateField({
   id,
   label,
@@ -33,10 +30,7 @@ export default function DateField({
 }) {
   const today = new Date();
   const [open, setOpen] = useState(false);
-  const [view, setView] = useState({
-    y: today.getFullYear(),
-    m: today.getMonth(),
-  });
+  const [view, setView] = useState({ y: today.getFullYear(), m: today.getMonth() });
   const [selected, setSelected] = useState(() => fromISO(value));
   const [position, setPosition] = useState({ right: false, up: false });
 
@@ -46,11 +40,7 @@ export default function DateField({
   const openCalendar = useCallback(() => {
     const parsed = fromISO(value);
     setSelected(parsed);
-    setView(
-      parsed
-        ? { y: parsed.y, m: parsed.m }
-        : { y: today.getFullYear(), m: today.getMonth() }
-    );
+    setView(parsed ? { y: parsed.y, m: parsed.m } : { y: today.getFullYear(), m: today.getMonth() });
     setOpen(true);
   }, [value, today]);
 
@@ -72,17 +62,7 @@ export default function DateField({
     };
   }, [open]);
 
-  // Cards establish their own stacking context (transform + backdrop-filter),
-  // so an open calendar would paint beneath the cards that follow it. Lift the
-  // card that owns the picker while it is open.
-  useEffect(() => {
-    if (!open) return undefined;
-    const card = wrapperRef.current?.closest('.card');
-    card?.classList.add('card-elevated');
-    return () => card?.classList.remove('card-elevated');
-  }, [open]);
-
-  // Keep the popover inside the viewport, like the original positionCalendar().
+  // Keep the popover inside the viewport.
   useLayoutEffect(() => {
     if (!open || !calendarRef.current) return;
     const rect = calendarRef.current.getBoundingClientRect();
@@ -115,8 +95,11 @@ export default function DateField({
   };
 
   return (
-    <div className="input-wrap">
-      <label htmlFor={id}>{label}{required ? ' *' : ''}</label>
+    <div className="field">
+      <label htmlFor={id}>
+        {label}
+        {required ? ' *' : ''}
+      </label>
       <div className="date-picker-wrapper" ref={wrapperRef}>
         <input
           id={id}
@@ -135,8 +118,11 @@ export default function DateField({
           aria-haspopup="dialog"
           aria-expanded={open}
           aria-invalid={Boolean(error)}
+          aria-describedby={error ? `${id}-error` : undefined}
         />
-        <span className="cal-icon" aria-hidden="true">📅</span>
+        <span className="cal-icon" aria-hidden="true">
+          <IconCalendar width={15} height={15} />
+        </span>
 
         {open && (
           <div
@@ -145,7 +131,9 @@ export default function DateField({
               'open',
               position.right ? 'align-right' : '',
               position.up ? 'drop-up' : '',
-            ].filter(Boolean).join(' ')}
+            ]
+              .filter(Boolean)
+              .join(' ')}
             role="dialog"
             aria-label={`Choose ${label.toLowerCase()}`}
             ref={calendarRef}
@@ -154,14 +142,18 @@ export default function DateField({
               <button type="button" onClick={() => changeMonth(-1)} aria-label="Previous month">
                 ‹
               </button>
-              <span className="cal-title">{MONTHS[view.m]} {view.y}</span>
+              <span className="cal-title">
+                {MONTHS[view.m]} {view.y}
+              </span>
               <button type="button" onClick={() => changeMonth(1)} aria-label="Next month">
                 ›
               </button>
             </div>
 
             <div className="cal-days-header" aria-hidden="true">
-              {DAYS.map((day) => <span key={day}>{day}</span>)}
+              {DAYS.map((day) => (
+                <span key={day}>{day}</span>
+              ))}
             </div>
 
             <div className="cal-grid">
@@ -175,20 +167,15 @@ export default function DateField({
                   view.m === today.getMonth() &&
                   view.y === today.getFullYear();
                 const isSelected =
-                  selected &&
-                  day === selected.d &&
-                  view.m === selected.m &&
-                  view.y === selected.y;
+                  selected && day === selected.d && view.m === selected.m && view.y === selected.y;
 
                 return (
                   <button
                     type="button"
                     key={day}
-                    className={[
-                      'cal-day',
-                      isToday ? 'today' : '',
-                      isSelected ? 'selected' : '',
-                    ].filter(Boolean).join(' ')}
+                    className={['cal-day', isToday ? 'today' : '', isSelected ? 'selected' : '']
+                      .filter(Boolean)
+                      .join(' ')}
                     onClick={() => setSelected({ y: view.y, m: view.m, d: day })}
                     aria-label={`${day} ${MONTHS[view.m]} ${view.y}`}
                     aria-pressed={Boolean(isSelected)}
@@ -200,13 +187,21 @@ export default function DateField({
             </div>
 
             <div className="cal-actions">
-              <button type="button" className="clear-btn" onClick={clear}>Clear</button>
-              <button type="button" className="confirm" onClick={confirm}>OK</button>
+              <button type="button" className="clear-btn" onClick={clear}>
+                Clear
+              </button>
+              <button type="button" className="confirm" onClick={confirm}>
+                OK
+              </button>
             </div>
           </div>
         )}
       </div>
-      {error && <span className="field-error">{error}</span>}
+      {error && (
+        <span className="error-text" id={`${id}-error`}>
+          {error}
+        </span>
+      )}
     </div>
   );
 }

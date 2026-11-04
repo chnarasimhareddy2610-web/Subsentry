@@ -1,6 +1,9 @@
-import { useEffect } from 'react';
+import { useEffect, useId } from 'react';
+import { IconClose } from './icons.jsx';
 
-export default function Modal({ title, onClose, children }) {
+export default function Modal({ title, subtitle, onClose, children, wide = false }) {
+  const titleId = useId();
+
   useEffect(() => {
     const handleKeyDown = (event) => {
       if (event.key === 'Escape') onClose();
@@ -20,11 +23,21 @@ export default function Modal({ title, onClose, children }) {
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <div className="modal glass" role="dialog" aria-modal="true" aria-label={title}>
+      <div
+        className={`modal${wide ? ' modal--wide' : ''}`}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+      >
         <div className="modal-head">
-          <h2>{title}</h2>
-          <button type="button" className="modal-close" onClick={onClose} aria-label="Close">
-            ✕
+          <div>
+            <h2 className="modal-title" id={titleId}>
+              {title}
+            </h2>
+            {subtitle && <p className="modal-sub">{subtitle}</p>}
+          </div>
+          <button type="button" className="modal-close" onClick={onClose} aria-label="Close dialog">
+            <IconClose width={16} height={16} />
           </button>
         </div>
         <div className="modal-body">{children}</div>

@@ -1,15 +1,15 @@
 import { app } from './app.js';
 import { config } from './config/env.js';
-import { connectDB, disconnectDB } from './config/db.js';
+import { connectDB, describeConnectionError, disconnectDB } from './config/db.js';
 
 async function start() {
+  // The database must be ready before Express starts listening: the orchestrator
+  // only starts Vite once /api/health reports database: "connected".
   try {
     await connectDB(config.mongoUri);
   } catch (error) {
-    console.error('[db] Could not connect to MongoDB:', error.message);
-    console.error(
-      '[db] Check MONGODB_URI in server/.env (copy server/.env.example) and that MongoDB is running.'
-    );
+    console.error(`[db] Could not connect to MongoDB (${config.mongoMode} mode):`);
+    console.error(describeConnectionError(error, config.mongoUri));
     process.exit(1);
   }
 
