@@ -131,7 +131,96 @@ Server error responses for status `>= 500` return a generic message; diagnostic 
 server logs only. The request body is capped at 100 kB and Mongoose `ObjectId`/`cast`/`validation`/
 duplicate-key errors are mapped to `400`/`422`/`400` JSON responses.
 
-Deploy checklist:
+### Recommended production architecture
+
+SubSentry's backend is a single long-running Node.js process (`node src/server.js`) that keeps a
+persistent Mongoose connection to MongoDB Atlas, serves the built React SPA from `client/dist/`,
+and enforces the security headers, optional Basic gate, and write rate limiter in-process. That model
+is a strong fit for a platform that runs a persistent server, such as **Render (Web Service)**, which
+is the recommended target here. The app reads `PORT` from the environment (default `5000`) and,
+when no host is given, Node binds to all interfaces — so on Render it binds to `0.0.0.0:$PORT` and
+Render forwards inbound traffic to it.
+
+**Vercel is not a good fit for this app as-is.** Vercel runs stateless serverless/edge functions that
+start and stop per request; a Mongoose connection would be opened and closed on every invocation,
+the in-process write-rate-limit buckets would be lost between calls, and there is no long-running
+process to serve the SPA and the API together. If Vercel is required later, the backend would need to
+be rewritten as a stateless API (connection pooling/HTTP-based persistence, external rate limiting, and
+a separate static host for the SPA) — out of scope for this deployment.
+
+### Render deployment (recommended)
+
+1. **Push the verified source** to GitHub (`main`). The repo's `npm start` runs the server only
+   (`node src/server.js`); Render runs that as the start command after its own build step.
+2. **Create a MongoDB Atlas cluster** (or reuse the existing one) and a database user, copy the
+   `mongodb+srv://` connection string, and percent-encode any special characters in the password.
+3. **Create a Render Web Service** from this repository:
+   - **Name**: `subsentry` (or any name you like).
+   - **Region**: pick the region closest to you and to the Atlas cluster.
+   - **Branch**: `main`.
+   - **Language**: `Node`.
+   - **Build Command**: `npm run build`.
+   - **Start Command**: `npm start`.
+   - **Environment**: set `NODE_ENV=production`.
+   - **Environment Variables / Secrets** (set these in the Render dashboard, **not** in the repo):
+     - `MONGODB_URI` — your Atlas `mongodb+srv://` string. Mark it as a secret.
+     - `CLIENT_ORIGIN` — the deployed origin, e.g. `https://subsentry.onrender.com` (the Express
+       process serves the SPA from the same origin, so same-origin requests do not need CORS; set
+       this to the actual origin in case of any cross-origin use, and include any custom domain).
+     - `AUTH_USER` and `AUTH_PASSWORD` — set both to enable the HTTP Basic gate (strongly
+       recommended for any internet-facing instance).
+     - `TRUST_PROXY=1` — Render terminates TLS at its load balancer and forwards requests over
+       HTTP, so set this so rate limiting sees the real client IP.
+     - `LOW_USAGE_THRESHOLD` and `RENEWAL_WINDOW_DAYS` — optional; defaults are `3` and `7`.
+   - **Health Check Path**: set to `/api/health` (it returns `{"status":"ok","database":"connected"}`
+     and is intentionally left open so Render's own health probe can reach it without credentials).
+   - Render provides free, managed TLS certificates and redirects HTTP to HTTPS automatically.
+4.  **Allowlist Render's outbound IP in Atlas → Network Access.** Render does not publish a single
+   static egress IP in its public docs. After the first deploy, find the Render service's outbound IP
+   in the Render dashboard / deploy logs and add it under Atlas → Network Access (or use a VPC/
+   private connection). Until the outbound IP is allowlisted, the deploy will fail to connect to Atlas
+   and the health check will report `database: "disconnected"`.
+5.  **Verify** after the first deploy: `GET https://<your-service>.onrender.com/api/health` should
+   return `database: "connected"`, and the dashboard should load over HTTPS with the security headers
+   present (use the security smoke `server/scripts/security.mjs` locally with
+   `AUTH_USER=... AUTH_PASSWORD=... WRITE_RATE_LIMIT_MAX=3` to confirm the gate, headers and 429
+   behaviour before exposing it).
+
+### Environment setup
+
+Requirements: **Node.js >= 18** and **MongoDB** — either a local `mongod` binary or a MongoDB
+Atlas cluster. Atlas is the primary mode: when `MONGODB_URI` is a `mongodb+srv://` string, the dev
+orchestrator connects straight to the cluster and never starts a local `mongod`.
+
+```bash
+npm install                          # installs root, client and server workspaces
+cp server/.env.example server/.env   # then edit values (never commit .env)
+```
+
+For Atlas, copy the SRV string from *Atlas → Connect* into `MONGODB_URI` and percent-encode any
+special characters in the password (`p@ss` → `p%40ss`). Allow your machine's IP under
+*Atlas → Network Access*.
+
+`server/.env` keys:
+
+| Variable | Default | Notes |
+| --- | --- | --- |
+| `PORT` | `5000` | API port; invalid values fall back to `5000`. On Render this is set to `10000` by default. |
+| `NODE_ENV` | `development` | Set to `production` in production; enables HSTS |
+| `MONGODB_URI` | `mongodb://127.0.0.1:27017/subsentry` | Primary connection string (`MONGO_URI` is a legacy alias and never overrides it). `mongodb+srv://` selects Atlas; a local host selects the bundled on-disk `mongod` |
+| `CLIENT_ORIGIN` | `http://localhost:5173` | Comma-separated list of allowed browser origins |
+| `LOW_USAGE_THRESHOLD` | `3` | Uses per 30 days below which a plan counts as low usage |
+| `RENEWAL_WINDOW_DAYS` | `7` | Days ahead that count as an upcoming renewal |
+
+In local mode data lives in `.data/mongodb` with logs in `.data/mongod.log`; both are git-ignored.
+The dev orchestrator reuses a cached `mongod` binary when one is available and prints a clear setup
+error if none can be found. In Atlas mode nothing is written to disk locally.
+
+Transient public-network failures (TLS alerts, resets) during the Atlas handshake are retried with
+backoff, and credentials are never written to logs — only a `scheme://host/database` target is
+printed.
+
+### Deploy checklist
 
 1. Build the client: `npm run build`.
 2. Set `MONGODB_URI` to your Atlas SRV string (or a local `mongod`) in `server/.env`.
